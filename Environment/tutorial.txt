@@ -1,0 +1,70 @@
+# The adjusted PPO configuration is trained for 60,000 episodes per run, using
+# rollouts of 2,048 steps as full batches for 30 epochs. Three delay conditions
+# are repeated with seven seeds each. Each command is run in a separate terminal
+# from the thesis folder, with 30-second mean delays used for the delayed conditions.
+
+# terminal 1
+python Training/train.py --delay none --seed 1
+
+# terminal 2
+python Training/train.py --delay none --seed 2
+
+# terminal 3
+python Training/train.py --delay none --seed 3
+
+# terminal 4
+python Training/train.py --delay none --seed 4
+
+# terminal 5
+python Training/train.py --delay none --seed 5
+
+# terminal 6
+python Training/train.py --delay none --seed 6
+
+# terminal 7
+python Training/train.py --delay none --seed 7
+
+# terminal 8
+python Training/train.py --delay lognormal --delay-mean 30 --seed 1
+
+# terminal 9
+python Training/train.py --delay lognormal --delay-mean 30 --seed 2
+
+# terminal 10
+python Training/train.py --delay lognormal --delay-mean 30 --seed 3
+
+# terminal 11
+python Training/train.py --delay lognormal --delay-mean 30 --seed 4
+
+# terminal 12
+python Training/train.py --delay lognormal --delay-mean 30 --seed 5
+
+# terminal 13
+python Training/train.py --delay lognormal --delay-mean 30 --seed 6
+
+# terminal 14
+python Training/train.py --delay lognormal --delay-mean 30 --seed 7
+
+# terminal 15
+python Training/train.py --delay deterministic --delay-mean 30 --seed 1
+
+# terminal 16
+python Training/train.py --delay deterministic --delay-mean 30 --seed 2
+
+# terminal 17
+python Training/train.py --delay deterministic --delay-mean 30 --seed 3
+
+# terminal 18
+python Training/train.py --delay deterministic --delay-mean 30 --seed 4
+
+# terminal 19
+python Training/train.py --delay deterministic --delay-mean 30 --seed 5
+
+# terminal 20
+python Training/train.py --delay deterministic --delay-mean 30 --seed 6
+
+# terminal 21
+python Training/train.py --delay deterministic --delay-mean 30 --seed 7
+
+# TensorBoard — Models is created in the thesis folder
+python -m tensorboard.main --logdir Models --port 6016
