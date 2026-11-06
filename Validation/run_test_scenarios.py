@@ -1,8 +1,8 @@
 """Evaluate trained policies in the dense 30-aircraft experiment.
 
 Traffic density is fixed at 0.0001 aircraft/km². Each policy is evaluated on
-500 held-out scenarios across nine delay conditions. Seven training seeds are
-used per model type, with one additional hold-only baseline (190 runs in total).
+500 held-out test scenarios across nine delay conditions. Seven training seeds are
+used per model type, with one additional no-CR baseline (190 runs in total).
 Observation normalisation is frozen and actions are selected deterministically.
 Completed run files are skipped when the same command is repeated.
 """
@@ -49,14 +49,14 @@ PRINT_EVERY  = 25
 
 
 def all_runs():
-    """Every test run as (model type, seed, delay law, mean delay): 3 x 7 x 9 + no CR = 190."""
+    """Every test run as (model type, seed, delay distribution, mean delay): 3 x 7 x 9 + no CR = 190."""
     runs = [(model_type, seed, law, mean) for model_type in MODEL_TYPES
             for seed in TRAINING_SEEDS for law, mean in TEST_DELAYS]
     return runs + [(NO_CR, 0) + NO_DELAY]
 
 
 def terminal_share(terminal, terminals):
-    """The share of the runs this terminal flies."""
+    """Return the experiment subset assigned to the specified terminal."""
     return all_runs()[terminal - 1::terminals]
 
 
@@ -66,19 +66,19 @@ def model_name(model_type, seed):
 
 
 def run_path(out, model_type, seed, law, mean):
-    """Where one run's CSV goes."""
+    """Construct the CSV output path for one evaluation run."""
     test = 'no_delay' if law == 'none' else f'{law}_{mean}s'
     return os.path.join(out, 'runs', f'{model_name(model_type, seed)}_{test}.csv')
 
 
 def checkpoint_steps(path):
-    """How many steps a checkpoint was trained for."""
+    """Read the cumulative training step count from a checkpoint."""
     with zipfile.ZipFile(path) as archive:
         return int(json.loads(archive.read('data').decode())['num_timesteps'])
 
 
 def find_model(models, model_type, seed):
-    """The furthest-trained checkpoint of one model, and its step count."""
+    """Return the checkpoint with the highest cumulative training step count."""
     folder = MODEL_TYPES[model_type]
     run_dir = os.path.join(models, folder, f'{folder}_seed{seed}')
     found = [(checkpoint_steps(path), path)
@@ -98,8 +98,8 @@ class _Ignored:
 
 
 class _Unpickler(pickle.Unpickler):
-    """Reads the observation statistics under any numpy version. The random state stored beside
-    them is not needed to test, and differs between numpy versions, so it is skipped."""
+    """Load observation statistics with compatibility handling for NumPy module paths.
+    Serialised NumPy random states are omitted because evaluation does not use them."""
 
     def find_class(self, module, name):
         if module.startswith('numpy.random'):
@@ -110,7 +110,7 @@ class _Unpickler(pickle.Unpickler):
 
 
 def load_policy(path):
-    """A checkpoint and the frozen normalisation statistics it was trained with."""
+    """Load a policy checkpoint and its frozen observation normalisation statistics."""
     from stable_baselines3 import PPO
 
     with open(path.replace('.zip', '_vecnorm.pkl'), 'rb') as handle:
@@ -121,7 +121,7 @@ def load_policy(path):
 
 
 def choose(policy, observation, blind=False):
-    """The action of the policy; blind=True hides the response state, as for a no-delay model."""
+    """Select a deterministic action, optionally masking response-state features for no-delay policies."""
     if policy is None:
         return HOLD_ACTION
     if blind:
@@ -133,8 +133,8 @@ def choose(policy, observation, blind=False):
 
 
 def count_executed(atco):
-    """Counts the instructions the ATCO actually passes on. The environment counts the advisories
-    sent to the ATCO, but a revision replaces the one being evaluated, so not all are flown."""
+    """Count executed heading and speed instructions. Pending advisories may be replaced
+    before execution, so issued and executed instruction counts are recorded separately."""
     executed = {'turns': 0, 'speed_changes': 0}
     act_if_ready = atco.act_if_ready
 
@@ -149,7 +149,7 @@ def count_executed(atco):
 
 
 def fly(env, policy, scenario_seed, blind=False):
-    """One scenario, and every KPI of its episode, raw and per flight hour."""
+    """Evaluate one scenario and return episode metrics and flight-hour-normalised rates."""
     observation, _ = env.reset(options={'scenario_seed': scenario_seed})
     executed = count_executed(env.atco)
     while True:
@@ -165,7 +165,7 @@ def fly(env, policy, scenario_seed, blind=False):
 
 
 def test_run(model_type, seed, law, mean, models, out, episodes):
-    """Fly one model in one delay environment over every test scenario."""
+    """Evaluate one policy under a specified delay condition across held-out test scenarios."""
     from Environment import AirspaceEnv
 
     path = run_path(out, model_type, seed, law, mean)
@@ -224,8 +224,7 @@ def _test_run_safely(run, models, out, episodes):
 
 
 def run_pool(terminal, terminals, workers, models, out, episodes, n_ac, density):
-    """This share of the runs, `workers` at a time. Each worker is a process with one environment
-    of its own and flies run after run."""
+    """Evaluate the assigned runs using separate worker processes, each with one environment."""
     share = [run for run in terminal_share(terminal, terminals)
              if not os.path.exists(run_path(out, *run))]
     print(f'share {terminal} of {terminals}: {len(share)} runs to do, {workers} at a time -> {out}',
@@ -287,7 +286,7 @@ def main():
     if args.workers < 1 or not 1 <= args.terminal <= args.terminals:
         parser.error('workers must be positive and terminal must be within 1..terminals')
 
-    # Only the dense experiment is configured here. Environment source is untouched.
+    # Apply the fixed aircraft count and density for the dense evaluation experiment.
     _init_worker(30, 0.0001)
 
     if args.merge:

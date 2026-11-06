@@ -15,7 +15,7 @@ for _index, _sign in SPEED_ACTIONS.items():
 
 
 def new_ep_stats():
-    """The empty counters for one episode."""
+    """Initialise episode statistics."""
     return {
         'reward': 0.0,
         'reward_los': 0.0,
@@ -49,7 +49,7 @@ def new_ep_stats():
 
 
 def episode_summary(stats):
-    """Every KPI of a finished episode, raw and per flight hour."""
+    """Return episode metrics and flight-hour-normalised rates."""
     s = stats
     flight_hours = max(s['flight_s'] / 3600.0, 1e-9)
     acted        = max(s['delay_acted'], 1)

@@ -1,6 +1,6 @@
 # Dense 30-aircraft experiment
 
-The trained models are evaluated with 30 aircraft at a density of 0.0001 aircraft/km². Each of the 21 models is tested on 500 held-out scenarios in nine delay conditions. A hold-only baseline is included, giving 190 runs.
+The trained models are evaluated with 30 aircraft at a density of 0.0001 aircraft/km². Each of the 21 models is tested on 500 held-out test scenarios in nine delay conditions. A no-CR baseline is included, giving 190 runs.
 
 Models and matching normalisation files are read from `Models/`. The checkpoint with the highest training step count is selected. Completion of 60,000 training episodes should be verified beforehand.
 

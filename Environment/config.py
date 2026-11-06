@@ -1,7 +1,7 @@
-"""Every constant of the simulation: traffic, sector, timing, delay law, reward weights, and
+"""Every constant of the simulation: traffic, sector, timing, delay distribution, reward weights, and
 the layout of the action and observation spaces.
 
-The scenario seeds are split here too: VALIDATION_SEEDS is held out of training.
+Validation scenario seeds are excluded from the training seed pool.
 """
 
 import math as _math
@@ -46,7 +46,7 @@ CONFIG = {
     'exits_per_episode':     4.0,  # Required exits as a multiple of the aircraft count
     'max_crossings':         8.0,  # Episode time limit as a multiple of sector crossing time
 
-    # Controller response delays
+    # Action-response delays
     'delay_mode':            'none',
     'delay_mean_s':          30.0,  # Mean response delay in seconds
     'delay_sigma':           0.4,  # Standard deviation in log space for lognormal delays

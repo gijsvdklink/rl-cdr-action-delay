@@ -81,12 +81,12 @@ METRICS = [
 
 
 def finished_episodes(infos):
-    """The summary dict of every episode that ended on this step."""
+    """Extract summaries for episodes completed at the current step."""
     return [info for info in infos if 'ep_reward_total' in info]
 
 
 def save(model, run_dir, name):
-    """A checkpoint and its VecNormalize statistics, which must travel together."""
+    """Save the policy checkpoint and its associated VecNormalize statistics."""
     model.save(os.path.join(run_dir, name))
     model.get_env().save(os.path.join(run_dir, f'{name}_vecnorm.pkl'))
 
@@ -147,7 +147,7 @@ class RunUntil(BaseCallback):
 
 
 class Checkpoint(BaseCallback):
-    """Write last_model every `every` steps, so a crash does not cost the whole run."""
+    """Save a recovery checkpoint at the configured step interval."""
 
     def __init__(self, run_dir, every):
         super().__init__()
@@ -171,7 +171,7 @@ def delay_type_name(delay_mode, delay_mean_s):
 
 
 def latest_checkpoint(run_dir):
-    """The furthest-trained checkpoint that still has its statistics beside it, or None."""
+    """Select the checkpoint with the highest step count and available normalisation statistics."""
     best, best_steps = None, -1
     for name in ('last_model', 'final_model'):
         path = os.path.join(run_dir, f'{name}.zip')
@@ -212,7 +212,7 @@ def train(delay_mode, seed, delay_mean_s, save_every=SAVE_EVERY, runs_root=RUNS_
         print(f'resumed from {checkpoint} at {model.num_timesteps:,} steps', flush=True)
     else:
         env   = VecNormalize(VecMonitor(venv))
-        # batch_size == the rollout, so each epoch is one gradient step on all 2048 samples
+        # Full-rollout batches produce one gradient update per epoch over 2,048 transitions.
         model = PPO('MlpPolicy', env, seed=seed, verbose=0, tensorboard_log=run_dir,
                     device='cpu', n_steps=N_STEPS, batch_size=N_STEPS, n_epochs=N_EPOCHS)
 

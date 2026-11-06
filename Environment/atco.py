@@ -1,8 +1,10 @@
-"""The delay mechanism: one outstanding advisory at a time, for one aircraft.
+"""The delay mechanism is implemented by the ATCO class.
 
-An advisory is executed once the response delay has passed, drawn as no delay, a fixed mean, or
-a lognormal with that mean. A revision of a pending advisory draws a shortened delay but can
-never execute sooner than the instruction it replaces.
+The combined ATCO and pilot response is represented by a single action-response
+delay between issuing an advisory and its execution. At most one pending advisory
+is stored, together with its aircraft, issue time and scheduled execution time.
+For a revision, a newly sampled delay is scaled by kappa. The revised advisory
+cannot be executed earlier than the advisory it replaces (Section 4.3).
 """
 
 import math
@@ -15,7 +17,7 @@ DELAY_MODES = ('none', 'deterministic', 'lognormal')
 class ATCO:
 
     def __init__(self, delay_type, rng, mean_s=None):
-        """Build the controller for one delay law, with the mean response time in seconds."""
+        """Initialise the delay mechanism with the specified delay type and mean action-response delay in seconds."""
         if delay_type not in DELAY_MODES:
             raise ValueError(f'unknown delay type {delay_type!r}; expected one of {DELAY_MODES}')
         self.delay_type = delay_type
@@ -29,17 +31,16 @@ class ATCO:
         self.advisory = None
 
     def pending_for(self, cs):
-        """The advisory awaiting execution for this aircraft, or None."""
+        """Return the pending advisory for the specified aircraft, or None."""
         return self.advisory if self.cs == cs else None
 
     def release(self, cs):
-        """Drop whatever is pending for this aircraft, as when the focus moves on."""
+        """Discard the pending advisory for the specified aircraft."""
         if self.cs == cs:
             self.cs = self.advisory = None
 
     def receive(self, cs, advisory, now_s):
-        """Take one advisory and set the second at which it will be executed; False if it
-        repeats what is already pending.
+        """Schedule an advisory for execution. Return False if its target matches the pending instruction.
         """
         held = self.pending_for(cs)
         if held is not None and self._same_instruction(held, advisory):
@@ -52,7 +53,7 @@ class ATCO:
 
         execute_at = now_s + round(tau)
         if revision:
-            # a revision never executes sooner than the instruction it replaces
+            # Preserve the previous execution time as a lower bound for the revised advisory.
             execute_at = max(held['execute_at_s'], execute_at)
 
         advisory['issued_at_s']      = now_s
@@ -63,14 +64,14 @@ class ATCO:
         return True
 
     def _same_instruction(self, held, advisory):
-        """Whether two advisories command the same heading or the same Mach."""
+        """Compare the target heading or Mach number of two advisories."""
         for kind in ('target_hdg', 'target_mach'):
             if kind in held and kind in advisory:
                 return abs(held[kind] - advisory[kind]) < 1e-9
         return False
 
     def act_if_ready(self, now_s, still_flying):
-        """The advisory whose delay has passed, or None; it is handed over once and then forgotten."""
+        """Return and clear an advisory eligible for execution, or None."""
         if self.advisory is None:
             return None
 
@@ -86,7 +87,7 @@ class ATCO:
         return ready
 
     def _draw_delay_s(self):
-        """One response delay in seconds, from the configured law."""
+        """Sample a response delay in seconds from the configured distribution."""
         if self.delay_type == 'none':
             return 0.0
         if self.delay_type == 'deterministic':

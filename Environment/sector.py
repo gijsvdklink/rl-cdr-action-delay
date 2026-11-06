@@ -15,7 +15,7 @@ from .config import CONFIG, KM_TO_NM
 
 
 def _circularity(polygon):
-    """How round a polygon is, 1 for a circle."""
+    """Calculate polygon circularity as 4πA/P²."""
     return 4 * math.pi * polygon.area / polygon.length ** 2
 
 
@@ -30,7 +30,7 @@ def _random_convex_polygon(n_vertices, rng):
 
 
 def make_sector_polygon(area_km2, rng):
-    """A convex sector of the given area in km2, centred on the origin and not too elongated."""
+    """Generate a centred convex sector with the specified area and minimum circularity."""
     target_nm2 = area_km2 * KM_TO_NM ** 2
     scaled = None
     for _ in range(1000):
@@ -45,7 +45,7 @@ def make_sector_polygon(area_km2, rng):
 
 
 def exit_point(polygon, start_nm, heading_deg):
-    """Where a straight track from this point leaves the polygon."""
+    """Calculate the polygon-boundary intersection along a straight track."""
     east, north = float(start_nm[0]), float(start_nm[1])
     h = math.radians(heading_deg)
 

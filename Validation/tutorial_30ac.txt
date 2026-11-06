@@ -1,4 +1,4 @@
-# Dense experiment: 30 aircraft at 0.0001 aircraft/km², with 500 held-out scenarios.
+# Dense experiment: 30 aircraft at 0.0001 aircraft/km², with 500 held-out test scenarios.
 # Run each command in a separate terminal from the thesis folder, after training.
 # The 190 runs are split across 24 terminals, with one worker per terminal.
 # Terminals 1–22 receive eight runs each; terminals 23–24 receive seven each.

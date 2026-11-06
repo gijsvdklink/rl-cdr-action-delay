@@ -14,7 +14,7 @@ NMS_PER_MS = 1.0 / _M_PER_NM
 
 def degto180(angle):
     """An angle wrapped to (-180, 180], for scalars or arrays."""
-    return (np.asarray(angle) + 180.0) % 360.0 - 180.0 if isinstance(angle, np.ndarray) \
+    return (np.asarray(angle) + 180.0) % 360.0 - 180.0 if isinstance(angle, np.ndarray)\
         else (angle + 180.0) % 360.0 - 180.0
 
 ON_ROUTE_DRIFT = 1 - math.cos(math.radians(CONFIG['on_route_hdg_tol_deg']))

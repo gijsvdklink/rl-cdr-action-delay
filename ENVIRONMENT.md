@@ -1,6 +1,6 @@
 # Gymnasium environment
 
-Aircraft conflict detection and resolution is simulated in `AirspaceEnv`. Every five simulated seconds, one aircraft is selected as the *focus ship*. A heading or speed advisory can then be issued. The advisory is executed by a controller model after a response delay. Aircraft motion is simulated in BlueSky at one-second intervals.
+Aircraft conflict detection and resolution is simulated in `AirspaceEnv`. Every five simulated seconds, one aircraft is selected as the *focus ship*. A heading or speed advisory can then be issued. The advisory is executed after an action-response delay representing the combined ATCO and pilot response. Aircraft motion is simulated in BlueSky at one-second intervals.
 
 ## Scenarios
 

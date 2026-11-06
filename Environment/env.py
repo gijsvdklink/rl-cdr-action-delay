@@ -58,7 +58,7 @@ class AirspaceEnv(gym.Env):
     _EMPTY_SLOT = [EMPTY_RANGE_NM, 0.0, 0.0, 0.0, NO_CONFLICT_S]
 
     def __init__(self, delay_mode=None, seed=None, delay_mean_s=None):
-        """Build the environment for one delay law; the scenario itself is made in reset."""
+        """Initialise the environment for a action-response delay distribution. Scenarios are generated on reset."""
         super().__init__()
         self.delay_mode = delay_mode if delay_mode is not None else CONFIG['delay_mode']
         if self.delay_mode not in DELAY_MODES:
@@ -100,7 +100,7 @@ class AirspaceEnv(gym.Env):
         return self._build_observation(), {}
 
     def step(self, action):
-        """One decision step: advise, fly five seconds, re-rank the traffic, score the reward."""
+        """Advance one decision interval and update the observation, reward and episode status."""
         action = int(action)
         self._spawn_due_aircraft()
 
@@ -123,16 +123,16 @@ class AirspaceEnv(gym.Env):
                 'focus_cs': self.focus_cs, 'n_aircraft': self.n_aircraft}
         if truncated:
             info.update(episode_summary(self._ep_stats))
-        # terminated is always False: an LoS is punished, not fatal, so episodes only run out
+        # Loss of separation incurs a reward penalty. Episode limits are reported as truncations.
         return self._build_observation(), reward, False, truncated, info
 
 
     def _drift(self, cs):
-        """How far this aircraft has strayed from the heading it entered on."""
+        """Absolute deviation from the initial heading."""
         return heading_drift(self._aircraft[cs].initial_hdg, self._hdg[self._row_of[cs]])
 
     def _select_focus(self):
-        """Choose the single aircraft to advise next: hysteresis first, then urgency, then drift."""
+        """Select the focus ship using retention criteria, conflict urgency and heading deviation."""
         flying = self._urgency_cs_list
         if not flying:
             return
@@ -146,7 +146,7 @@ class AirspaceEnv(gym.Env):
 
         incumbent     = self.focus_cs
         most_drifting = max(flying, key=self._drift)
-        # hold the incumbent through a brief clear spell, unless something urgent appears elsewhere
+        # Retain the current focus during the clearance interval unless the urgency threshold is exceeded.
         keep = (incumbent in self._row_of
                 and self._aircraft[incumbent].steps_since_conflict < CONFIG['focus_clear_steps']
                 and worst.max() < CONFIG['focus_emergency_u'])
@@ -176,7 +176,7 @@ class AirspaceEnv(gym.Env):
 
 
     def _build_advisory(self, action_idx, ac):
-        """Turn one action index into a target heading or Mach, relative to the route."""
+        """Convert an action index to a target heading or Mach number."""
         advisory = {'action': action_idx}
 
         if action_idx in SPEED_ACTIONS:
@@ -194,7 +194,7 @@ class AirspaceEnv(gym.Env):
         return advisory
 
     def _issue_advisory(self, cs, action_idx):
-        """Send the advisory to the controller, and count a repeat or a discarded one."""
+        """Submit an advisory and update repetition and replacement counters."""
         if action_idx == HOLD_ACTION or cs not in self._row_of:
             return
 
@@ -218,11 +218,11 @@ class AirspaceEnv(gym.Env):
         ac.last_advisory_action = action_idx
 
     def _still_flying(self, cs):
-        """Whether this callsign is still airborne."""
+        """Check whether the specified aircraft remains in the simulation."""
         return cs in self._aircraft and bs.traf.id2idx(cs) >= 0
 
     def _execute_due_advisories(self):
-        """Fly the pending advisory once its delay has passed, and record the response time."""
+        """Execute an eligible pending advisory and record its response time."""
         ready = self.atco.act_if_ready(self._sim_time_s, self._still_flying)
         if ready is None:
             return
@@ -242,7 +242,7 @@ class AirspaceEnv(gym.Env):
 
 
     def _build_observation(self):
-        """The 29 values the policy sees, from the focus ship's point of view."""
+        """Construct the 29-dimensional observation for the focus ship."""
         cs = self.focus_cs
         if cs is None or cs not in self._row_of:
             self._last_intruder_cs = [None] * N_NEIGHBOURS
@@ -253,7 +253,7 @@ class AirspaceEnv(gym.Env):
         return np.array(obs, dtype=np.float32)
 
     def _ownship_features(self, cs):
-        """The nine ownship values, including the four that describe the pending advisory."""
+        """Construct the nine focus-ship features, including four response-state features."""
         row      = self._row_of[cs]
         own_hdg  = self._hdg[row]
         ac       = self._aircraft[cs]
@@ -286,7 +286,7 @@ class AirspaceEnv(gym.Env):
                 pend_spd]
 
     def _intruder_features(self, cs):
-        """Every other aircraft as five values in the ownship frame, before the slots are filled."""
+        """Compute five relative-state features for each neighbouring aircraft."""
         own_row = self._row_of[cs]
         sep     = CONFIG['sep_nm']
         own_pos = self._pos[own_row]
@@ -317,7 +317,7 @@ class AirspaceEnv(gym.Env):
         return self._fill_intruder_slots(intruders)
 
     def _fill_intruder_slots(self, intruders):
-        """The four neighbour slots: conflicts by urgency first, then the nearest aircraft."""
+        """Populate neighbour observations by conflict urgency followed by proximity."""
         ordered = (sorted((r for r in intruders if r[0] > 0), key=lambda r: -r[0])
                    + sorted(intruders, key=lambda r: r[1]))
 
@@ -338,7 +338,7 @@ class AirspaceEnv(gym.Env):
 
 
     def _compute_reward(self, acting_cs, action_idx):
-        """The three reward terms of the paper, all charged to the focus ship."""
+        """Compute separation, drift and advisory cost penalties for the focus ship."""
         r_los = -CONFIG['w_los'] * self._los_seconds_this_step
 
         r_drift = -CONFIG['w_drift'] * self._drift_sum_this_step
@@ -375,7 +375,7 @@ class AirspaceEnv(gym.Env):
             self._return_blocked = blocked.any(axis=1).astype(float)
 
     def _airborne_indices(self, index_of=None):
-        """Our callsigns and their BlueSky rows, in callsign order."""
+        """Map aircraft identifiers to BlueSky indices in callsign order."""
         if index_of is None:
             index_of = {cs: i for i, cs in enumerate(bs.traf.id)}
         flying, indices = [], []
@@ -388,7 +388,7 @@ class AirspaceEnv(gym.Env):
 
 
     def _advance_simulation(self, acting_cs):
-        """Fly action_freq seconds, executing due advisories and watching separation each second."""
+        """Advance action_freq simulation steps and evaluate advisory execution and separation."""
         self._los_seconds_this_step = 0
         self._drift_sum_this_step   = 0.0
 
@@ -414,7 +414,7 @@ class AirspaceEnv(gym.Env):
             self._prev_los_pairs = pairs
 
     def _scan_separation(self, index_of=None):
-        """The pairs closer than the separation minimum right now."""
+        """Identify aircraft pairs below the minimum separation distance."""
         flying, indices = self._airborne_indices(index_of)
         if len(flying) < 2:
             return set()
@@ -426,7 +426,7 @@ class AirspaceEnv(gym.Env):
 
 
     def _spawn_due_aircraft(self):
-        """Refill the slots whose timer has run out, if a safe entry can be found."""
+        """Attempt aircraft insertion in slots whose scheduled entry time has been reached."""
         ready    = sorted(slot for slot, t in self._pending_spawns.items() if t <= 1)
         requeued = set()
         for slot in ready:
@@ -442,7 +442,7 @@ class AirspaceEnv(gym.Env):
                 self._pending_spawns[slot] -= 1
 
     def _plan_safe_entry(self):
-        """An entry route that is clear of the traffic already in the sector, or None."""
+        """Return an entry route satisfying traffic separation constraints, or None."""
         for _ in range(CONFIG['max_placement_tries']):
             route = plan_entry_route(self._polygon_shape, self.traffic_rng)
             if route is not None and self._spawn_is_safe(route):
@@ -450,7 +450,7 @@ class AirspaceEnv(gym.Env):
         return None
 
     def _spawn_is_safe(self, route):
-        """Whether a candidate entry keeps the buffer and predicts no loss of separation."""
+        """Check entry separation and predicted loss of separation for a candidate aircraft."""
         _, indices = self._airborne_indices()
         if not indices:
             return True
@@ -467,7 +467,7 @@ class AirspaceEnv(gym.Env):
         return not bool((t_los < CONFIG['t_warn']).any())
 
     def _create_aircraft(self, slot, route):
-        """Create one aircraft in BlueSky and record the route the environment scores it against."""
+        """Create a BlueSky aircraft and store its reference route for performance evaluation."""
         cs = f'AC{self._next_callsign_id:02d}'
         self._next_callsign_id += 1
         mach    = CONFIG['ac_mach']
@@ -492,7 +492,7 @@ class AirspaceEnv(gym.Env):
         self._slots[slot] = cs
 
     def _remove_exited_aircraft(self):
-        """Score, delete and re-queue every aircraft that has left the sector."""
+        """Record exit metrics, remove departed aircraft and schedule replacement traffic."""
         for cs in self._exited_callsigns():
             slot = self._slots.index(cs)
             idx  = bs.traf.id2idx(cs)
@@ -506,7 +506,7 @@ class AirspaceEnv(gym.Env):
                 self._pending_spawns[slot] = 1
 
     def _exited_callsigns(self):
-        """The callsigns no longer inside the polygon."""
+        """Return identifiers of aircraft outside the sector boundary."""
         flying, indices = self._airborne_indices()
 
         inside_sector = {}
@@ -518,7 +518,7 @@ class AirspaceEnv(gym.Env):
         return [cs for cs in sorted(self._aircraft) if not inside_sector.get(cs, False)]
 
     def _no_turn_exit_nm(self, start_nm, heading_deg):
-        """Where this aircraft would leave the sector if it never turned."""
+        """Determine the sector exit point along the initial heading."""
         return exit_point(self._polygon_shape, start_nm, heading_deg)
 
 
@@ -562,7 +562,7 @@ class AirspaceEnv(gym.Env):
         self._ep_stats            = new_ep_stats()
 
     def _build_sector(self):
-        """Draw the sector: aircraft count, density, polygon, and the two episode-length limits."""
+        """Generate sector geometry, traffic parameters and episode limits."""
         n_ac     = CONFIG['n_aircraft'](self.scenario_rng)
         area_km2 = float(n_ac / CONFIG['rho'](self.scenario_rng))
         poly     = make_sector_polygon(area_km2, self.scenario_rng)
@@ -585,7 +585,7 @@ class AirspaceEnv(gym.Env):
         self._slots     = [None] * n_ac
 
     def _spawn_initial_traffic(self):
-        """Fill every slot at the start of the episode, deferring the ones that will not fit."""
+        """Initialise traffic slots and defer entries that fail placement constraints."""
         for slot in range(self.n_aircraft):
             for _ in range(CONFIG['max_placement_tries']):
                 route = self._random_start_in_sector()
@@ -596,7 +596,7 @@ class AirspaceEnv(gym.Env):
                 self._pending_spawns[slot] = 5
 
     def _random_start_in_sector(self):
-        """A random interior start with a long enough track across the sector."""
+        """Sample an interior position and heading satisfying the minimum route-length constraint."""
         minx, miny, maxx, maxy = self._polygon_shape.bounds
         for _ in range(CONFIG['max_placement_tries']):
             east  = self.scenario_rng.uniform(minx, maxx)

@@ -26,7 +26,7 @@ class _ScreenDummy(ScreenIO):
 
 
 def start_bluesky():
-    """Start BlueSky once per process and set it to a one-second step, unpaced."""
+    """Initialise BlueSky once per process with the configured integration step and fast-forward mode."""
     global _started
     if not _started:
         bs.init(mode='sim', detached=True)
@@ -36,7 +36,7 @@ def start_bluesky():
 
 
 def traffic_states(indices):
-    """Positions (NM) and velocities (NM/s) of the given BlueSky rows, in our frame."""
+    """Return local east/north positions (NM) and velocities (NM/s) for BlueSky indices."""
     idx = np.asarray(indices, dtype=int)
 
     pos   = latlon_to_nm(CONFIG['center_ll'], bs.traf.lat[idx], bs.traf.lon[idx])
