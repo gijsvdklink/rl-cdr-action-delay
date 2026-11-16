@@ -38,7 +38,7 @@ class Aircraft:
 
     def __init__(self, initial_hdg, no_turn_exit_nm, spawn_pos_nm, prev_pos_nm,
                  commanded_hdg, commanded_mach, steps_since_conflict):
-        """What the environment remembers about one aircraft: its route, its commanded state and
+        """Initalisation of one aircraft: its route, its commanded state and
         its track.
         """
         self.initial_hdg         = initial_hdg
@@ -58,7 +58,7 @@ class AirspaceEnv(gym.Env):
     _EMPTY_SLOT = [EMPTY_RANGE_NM, 0.0, 0.0, 0.0, NO_CONFLICT_S]
 
     def __init__(self, delay_mode=None, seed=None, delay_mean_s=None):
-        """Initialise the environment for a action-response delay distribution. Scenarios are generated on reset."""
+        """Initialise the environment."""
         super().__init__()
         self.delay_mode = delay_mode if delay_mode is not None else CONFIG['delay_mode']
         if self.delay_mode not in DELAY_MODES:
